@@ -1,0 +1,80 @@
+{
+  "name": "CRM 03 - Error Monitor",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -416,
+        -112
+      ],
+      "id": "0ba44d59-ee54-4701-8546-479e600c63e7",
+      "name": "CRM Error Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "const e = $input.first().json;\n\nreturn [{\n  json: {\n    text: [\n      'CRM workflow failed',\n\n      'Workflow: ' +\n        (e.workflow?.name ?? 'Unknown'),\n\n      'Node: ' +\n        (\n          e.execution?.lastNodeExecuted ??\n          e.trigger?.error?.node?.name ??\n          'Unknown'\n        ),\n\n      'Execution: ' +\n        (e.execution?.id ?? 'Not available'),\n\n      'Open the n8n execution to inspect the error.',\n\n      'Execution URL: ' +\n        (e.execution?.url ?? 'Not available')\n\n    ].join('\\n')\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -192,
+        -112
+      ],
+      "id": "31975dde-13b7-4778-839a-2e037007fa85",
+      "name": "Format CRM Error"
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        32,
+        -112
+      ],
+      "id": "2d908dca-e37d-48ab-b749-1446dd194376",
+      "name": "Send CRM Error"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "CRM Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format CRM Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format CRM Error": {
+      "main": [
+        [
+          {
+            "node": "Send CRM Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}

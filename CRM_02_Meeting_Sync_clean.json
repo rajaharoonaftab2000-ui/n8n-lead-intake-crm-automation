@@ -1,0 +1,479 @@
+{
+  "name": "CRM 02 - Meeting Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -592,
+        -160
+      ],
+      "id": "e90c1946-4f54-4f64-85c5-ab058305052f",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "942cc7f4-58ec-4c40-b71e-0c5959f6d7cf",
+              "name": "pipeline_id",
+              "value": "default",
+              "type": "string"
+            },
+            {
+              "id": "8899f20b-acba-4e36-9407-7244b60e6e05",
+              "name": "stage_new",
+              "value": "YOUR_STAGE_ID_NEW",
+              "type": "string"
+            },
+            {
+              "id": "9fd75920-9dcf-42d7-bdad-a2fcfb6d3c02",
+              "name": "stage_qualified",
+              "value": "YOUR_STAGE_ID_QUALIFIED",
+              "type": "string"
+            },
+            {
+              "id": "f5705dd6-7b2f-4463-9a9d-3e1841b86f8c",
+              "name": "stage_meeting",
+              "value": "YOUR_STAGE_ID_MEETING_BOOKED",
+              "type": "string"
+            },
+            {
+              "id": "d560ce0a-e4c8-4d0e-b6be-d31a1e71c1de",
+              "name": "stage_won",
+              "value": "closedwon",
+              "type": "string"
+            },
+            {
+              "id": "803d2156-7d82-4e9e-83fc-7420841e476c",
+              "name": "stage_lost",
+              "value": "closedlost",
+              "type": "string"
+            },
+            {
+              "id": "50bd2792-cad7-4cb6-8d87-f935c976d6ec",
+              "name": "telegram_chat_id",
+              "value": "YOUR_TELEGRAM_CHAT_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -368,
+        -160
+      ],
+      "id": "66ccac29-f76a-4071-a4fb-70ee92774107",
+      "name": "Booking Config"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "YOUR_CALENDAR_ID@group.calendar.google.com",
+          "mode": "id"
+        },
+        "returnAll": true,
+        "timeMin": "={{ $now.minus({days:1}).toISO() }}",
+        "timeMax": "={{ $now.plus({days:90}).toISO() }}",
+        "options": {
+          "fields": "*"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -144,
+        -160
+      ],
+      "id": "2916000c-33a0-4803-b350-2a0a01ec9539",
+      "name": "Get CRM Meetings"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        80,
+        -160
+      ],
+      "id": "64488f54-1bb8-4f6f-a59e-54d9e84a47d1",
+      "name": "Loop Meetings"
+    },
+    {
+      "parameters": {
+        "jsCode": "const e = $input.first().json;\n\nconst d = String(e.description ?? '')\n  .replace(/<[^>]*>/g, ' ');\n\nconst id =\n  d.match(/CRM_DEAL_ID\\s*:\\s*(\\d+)/i)?.[1] ?? '';\n\nconst email = (\n  d.match(/CRM_EMAIL\\s*:\\s*([^\\s<]+)/i)?.[1] ?? ''\n).toLowerCase();\n\nconst guests = (e.attendees ?? [])\n  .map(a => String(a.email ?? '').toLowerCase());\n\nconst start = e.start?.dateTime;\n\nconst valid =\n  e.status !== 'cancelled' &&\n  !!e.id &&\n  !!id &&\n  !!email &&\n  guests.includes(email) &&\n  !!start;\n\nreturn [{\n  json: {\n    valid,\n    deal_id: id,\n    email,\n    event_id: e.id ?? '',\n    start: start ?? '',\n    event_key:\n      valid ? `${e.id}|${start}` : '',\n    event_link: e.htmlLink ?? '',\n    event_summary: e.summary ?? ''\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        -144
+      ],
+      "id": "463b55e6-7596-4dd1-9428-984acf81a154",
+      "name": "Parse Booking"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "8a0eb388-f0eb-45ab-9dac-c2c951dc8475",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        608,
+        -144
+      ],
+      "id": "4e2b339e-c090-4e78-b964-0e2175cbe22d",
+      "name": "Valid Booking?"
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://api.hubapi.com/crm/v3/objects/deals/' + $('Parse Booking').item.json.deal_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "properties",
+              "value": "pipeline,dealstage,aa_opportunity_key,aa_event_key"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        832,
+        -160
+      ],
+      "id": "0f7da0d9-5b0d-4b45-a05e-685217f97284",
+      "name": "Read Booked Deal"
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $input.first().json;\n\nconst b = $('Parse Booking').item.json;\nconst c = $('Booking Config').first().json;\n\nif (Number(r.statusCode) === 404) {\n  return [{\n    json: {\n      sync: false,\n      reason: 'Deal not found; review booking marker'\n    }\n  }];\n}\n\nif (Number(r.statusCode) !== 200) {\n  throw new Error(\n    `Booking deal lookup failed: ${r.statusCode}`\n  );\n}\n\nconst p = r.body.properties ?? {};\n\nconst correct =\n  p.pipeline === c.pipeline_id &&\n  String(p.aa_opportunity_key ?? '')\n    .split('|')[0] === b.email;\n\nconst canMove = [\n  c.stage_new,\n  c.stage_qualified,\n  c.stage_meeting\n].includes(p.dealstage);\n\nconst duplicate =\n  p.aa_event_key === b.event_key;\n\nreturn [{\n  json: {\n    sync: correct && canMove && !duplicate,\n\n    reason: !correct\n      ? 'Deal/email/pipeline mismatch'\n      : !canMove\n        ? 'Deal is beyond booking stage or closed'\n        : duplicate\n          ? 'Already synced'\n          : 'Ready'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        -160
+      ],
+      "id": "fa8eefc8-fce2-4e02-b10b-74c2d71139a8",
+      "name": "Booking Decision"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "39c0f231-9368-42f9-ab65-bde9bb328285",
+              "leftValue": "={{ $json.sync }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1280,
+        -160
+      ],
+      "id": "7127a7c0-579b-454d-bc84-68438ef0c8ea",
+      "name": "Sync Booking?"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://api.hubapi.com/crm/v3/objects/deals/' + $('Parse Booking').item.json.deal_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  properties: {\n    dealstage:\n      $('Booking Config').first().json.stage_meeting\n  }\n} }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1536,
+        -176
+      ],
+      "id": "ee33e9db-b089-437d-ad28-1ce009512032",
+      "name": "Update Meeting Stage"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Booking Config').first().json.telegram_chat_id }}",
+        "text": "={{ [   'CRM meeting booked',    'Deal: ' +     $('Parse Booking').item.json.deal_id,    'Customer: ' +     $('Parse Booking').item.json.email,    'Start: ' +     $('Parse Booking').item.json.start,    'Event: ' +     $('Parse Booking').item.json.event_link  ].join('\\n') }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1760,
+        -176
+      ],
+      "id": "e68fd43b-a4f7-440f-b98c-1e886cdc24e0",
+      "name": "Booking Alert"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://api.hubapi.com/crm/v3/objects/deals/' + $('Parse Booking').item.json.deal_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  properties: {\n    aa_event_key:\n      $('Parse Booking').item.json.event_key\n  }\n} }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1984,
+        -176
+      ],
+      "id": "8be1098e-8d0d-45d2-961f-caa5801cb55f",
+      "name": "Mark Booking Synced"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Booking Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Booking Config": {
+      "main": [
+        [
+          {
+            "node": "Get CRM Meetings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get CRM Meetings": {
+      "main": [
+        [
+          {
+            "node": "Loop Meetings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Meetings": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Parse Booking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Booking": {
+      "main": [
+        [
+          {
+            "node": "Valid Booking?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Booking?": {
+      "main": [
+        [
+          {
+            "node": "Read Booked Deal",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Meetings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Booked Deal": {
+      "main": [
+        [
+          {
+            "node": "Booking Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Booking Decision": {
+      "main": [
+        [
+          {
+            "node": "Sync Booking?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sync Booking?": {
+      "main": [
+        [
+          {
+            "node": "Update Meeting Stage",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Meetings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Meeting Stage": {
+      "main": [
+        [
+          {
+            "node": "Booking Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Booking Alert": {
+      "main": [
+        [
+          {
+            "node": "Mark Booking Synced",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Booking Synced": {
+      "main": [
+        [
+          {
+            "node": "Loop Meetings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}

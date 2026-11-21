@@ -167,4 +167,4 @@ Building practical n8n workflows, AI integrations, and business automations.
 
 Watch the lead intake workflow in action:
 
-[Watch the CRM Automation Workflows (1)](./CRM Automation Workflows (1).mp4)
+[Watch the Lead_Intake_Automation_90s.mp4](./Lead_Intake_Automation_90s.mp4)
